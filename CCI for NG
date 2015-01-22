@@ -2,6 +2,7 @@ require(quantstrat)
 load("downloader.RData")
 
 NG <- DownloadFutures("CHRIS/CME_NG",start_date='2006-02-02')
+plot(NG)
 
 initDate='1990-01-01'
 currency('USD')
@@ -39,20 +40,20 @@ add.indicator(strategy.st,
 
 # Signals for CCI
 add.signal(strategy.st,
-           name='sigThreshold', arguments=list(columns=c(CCIindex), threshold=-100,
+           name='sigThreshold', arguments=list(columns=c('CCIindex'), threshold=-100,
                                                relationship="lt"),
            label="CCIlong")
 add.signal(strategy.st,
-           name='sigThreshold', arguments=list(columns=c(CCIindex), threshold=100,
+           name='sigThreshold', arguments=list(columns=c('CCIindex'), threshold=100,
                                                relationship="gt"),
            label="CCIshort")
 #Exit signals!
 add.signal(strategy.st,
-           name='sigThreshold', arguments=list(columns=c(CCIindex), threshold=10,
+           name='sigThreshold', arguments=list(columns=c('CCIindex'), threshold=10,
                                                relationship="gt"),
            label="ELong")
 add.signal(strategy.st,
-           name='sigThreshold', arguments=list(columns=c(CCIindex), threshold=-10,
+           name='sigThreshold', arguments=list(columns=c('CCIindex'), threshold=-10,
                                                relationship="lt"),
            label="EShort")
 
@@ -70,14 +71,14 @@ add.signal(strategy.st,
 # ENTER RULES
 # enter long
 add.rule(strategy.st, name='ruleSignal', 
-         arguments=list(sigcol=c(xlong,CCIlong),
+         arguments=list(sigcol=c('xlong','CCIlong'),
                         sigval=TRUE, orderside='long',
-                        ordertype='stoplimit',prefer='High',threshold=.0005,
-                        orderqty=+1, replace=FALSE),),
+                        ordertype='stoplimit', prefer='High',threshold=.0005,
+                        orderqty=+1, replace=FALSE)),
           type='enter', label='EnterLong')
 # enter short
 add.rule(strategy.st, name='ruleSignal', 
-         arguments=list(sigcol=c(xshort,CCIshort),
+         arguments=list(sigcol=c('xshort','CCIshort'),
                         sigval=TRUE, orderside='short',
                         ordertype='stoplimit',prefer='Loq',threshold=-.0005,
                         orderqty=+1, replace=FALSE),),
@@ -85,15 +86,15 @@ add.rule(strategy.st, name='ruleSignal',
 
 # EXIT RULES
 add.rule(strategy.st, name='ruleSignal', 
-         arguments=list(sigcol=c("ELong"),
-                        sigval=TRUE, orderside='short',ordertype='market',
-                        orderqty='all', replace=FALCE),
+         arguments=list(sigcol=c("ELong"), sigval=TRUE, 
+                        orderside='short',ordertype='market',
+                        orderqty='all', replace=TRUE),
          type='exit',
          label='ExitLong')
 add.rule(strategy.st, name='ruleSignal', 
          arguments=list(sigcol=c("EShort"),
                         sigval=TRUE, orderside='long',ordertype='market',
-                        orderqty='all', replace=FALCE),
+                        orderqty='all', replace=TRUE),
          type='exit',
          label='ExitShort')
 
@@ -123,3 +124,4 @@ portString <- paste0("portfolio.", portfolio.st)
 portPL <- .blotter[[portString]]$summary$Net.Trading.PL
 portPL <- portPL[-1,]
 plot(cumsum(portPL)
+
