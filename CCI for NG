@@ -1,0 +1,125 @@
+require(quantstrat)
+load("downloader.RData")
+
+NG <- DownloadFutures("CHRIS/CME_NG",start_date='2006-02-02')
+
+initDate='1990-01-01'
+currency('USD')
+Sys.setenv(TZ="UTC")
+symbols <- c("NG")
+stock(symbols, currency="USD", multiplier=1)
+
+tradeSize <- 100000
+initEq <- tradeSize*length(symbols)
+
+strategy.st <- portfolio.st <- account.st <- "NG"
+rm.strat(portfolio.st)
+rm.strat(strategy.st)
+initPortf(portfolio.st, symbols=symbols, initDate=initDate, currency='USD')
+initAcct(account.st, portfolios=portfolio.st, initDate=initDate, currency='USD',initEq=initEq)
+initOrders(portfolio.st, initDate=initDate)
+strategy(strategy.st, store=TRUE)
+
+nCCI <- 15
+nF <- 10
+nS <- 30
+
+# CCI as a first indicator
+add.indicator(strategy.st,
+              name='CCI', arguments=list(x=quote(cl(mktdata)[,1]),
+                                         n=nCCI, 'SMA', c=0.015),
+              label="CCIindex")
+# 2 MAs
+add.indicator(strategy.st,
+  name='SMA', arguments=list(x=quote(Cl(mktdata)[,1]),n=nF),
+  label="nFast")
+add.indicator(strategy.st,
+  name='SMA', arguments=list(x=quote(Cl(mktdata)[,1]),n=nS),
+  label="nSlow")
+
+# Signals for CCI
+add.signal(strategy.st,
+           name='sigThreshold', arguments=list(columns=c(CCIindex), threshold=-100,
+                                               relationship="lt"),
+           label="CCIlong")
+add.signal(strategy.st,
+           name='sigThreshold', arguments=list(columns=c(CCIindex), threshold=100,
+                                               relationship="gt"),
+           label="CCIshort")
+#Exit signals!
+add.signal(strategy.st,
+           name='sigThreshold', arguments=list(columns=c(CCIindex), threshold=10,
+                                               relationship="gt"),
+           label="ELong")
+add.signal(strategy.st,
+           name='sigThreshold', arguments=list(columns=c(CCIindex), threshold=-10,
+                                               relationship="lt"),
+           label="EShort")
+
+# Signals for SMA
+add.signal(strategy.st,
+           name='sigCrossover',arguments=list(columns=c("nFast","nSlow"),
+                                              relationship="gt"),
+           label='xlong')
+# Signal 2 - short rule
+add.signal(strategy.st,
+           name='sigCrossover',arguments=list(columns=c("nFast","nSlow"),
+                                              relationship="gt"),
+           label='xshort')
+
+# ENTER RULES
+# enter long
+add.rule(strategy.st, name='ruleSignal', 
+         arguments=list(sigcol=c(xlong,CCIlong),
+                        sigval=TRUE, orderside='long',
+                        ordertype='stoplimit',prefer='High',threshold=.0005,
+                        orderqty=+1, replace=FALSE),),
+          type='enter', label='EnterLong')
+# enter short
+add.rule(strategy.st, name='ruleSignal', 
+         arguments=list(sigcol=c(xshort,CCIshort),
+                        sigval=TRUE, orderside='short',
+                        ordertype='stoplimit',prefer='Loq',threshold=-.0005,
+                        orderqty=+1, replace=FALSE),),
+        type='enter', label='EnterShort')
+
+# EXIT RULES
+add.rule(strategy.st, name='ruleSignal', 
+         arguments=list(sigcol=c("ELong"),
+                        sigval=TRUE, orderside='short',ordertype='market',
+                        orderqty='all', replace=FALCE),
+         type='exit',
+         label='ExitLong')
+add.rule(strategy.st, name='ruleSignal', 
+         arguments=list(sigcol=c("EShort"),
+                        sigval=TRUE, orderside='long',ordertype='market',
+                        orderqty='all', replace=FALCE),
+         type='exit',
+         label='ExitShort')
+
+# Performance analitics
+t1 <- Sys.time()
+out <- applyStrategy(strategy=strategy.st,portfolios=portfolio.st)
+t2 <- Sys.time()
+print(t2-t1)
+
+# Update trading portfolio
+updatePortf(portfolio.st)
+dateRange <- time(getPortfolio(portfolio.st)$summary)[-1]
+updateAcct(portfolio.st,dateRange)
+updateEndEq(account.st)
+
+# Statistics of trades
+tStats <- tradeStats(Portfolios = portfolio.st, use="trades", inclZeroDays=FALSE)
+tStats[,4:ncol(tStats)] <- round(tStats[,4:ncol(tStats)], 2)
+print(data.frame(t(tStats[,-c(1,2)])))
+(aggPF <- sum(tStats$Gross.Profits)/-sum(tStats$Gross.Losses))
+(aggCorrect <- mean(tStats$Percent.Positive))
+(numTrades <- sum(tStats$Num.Trades))
+(meanAvgWLR <- mean(tStats$Avg.WinLoss.Ratio[tStats$Avg.WinLoss.Ratio < Inf], na.rm=TRUE))
+
+# Cash P&L
+portString <- paste0("portfolio.", portfolio.st)
+portPL <- .blotter[[portString]]$summary$Net.Trading.PL
+portPL <- portPL[-1,]
+plot(cumsum(portPL)
