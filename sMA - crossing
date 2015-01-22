@@ -1,0 +1,129 @@
+require(quantmod)
+require(quantstrat)
+
+getSymbols("MSFT", from="1990-01-01")
+MSFT <- MSFT["2006-02-02::"]
+head(MSFT)
+chartSeries(MSFT)
+
+initDate='1990-01-01'
+currency('USD')
+Sys.setenv(TZ="UTC")
+symbols <- c("MSFT")
+stock(symbols, currency="USD", multiplier=1)
+
+strategy.st <- portfolio.st <- account.st <-"MSFT_SMA"
+
+rm.strat(portfolio.st)
+rm.strat(strategy.st)
+initPortf(portfolio.st, symbols=symbols, initDate=initDate, currency='USD')
+initAcct(account.st, portfolios=portfolio.st, initDate=initDate, currency='USD')
+initOrders(portfolio.st, initDate=initDate)
+strategy(strategy.st, store=TRUE)
+
+nF <- 10
+nS <- 30
+
+# Indicator #1 Fast MA
+add.indicator(
+  strategy.st,
+  name='SMA',
+  arguments=list(
+    x=quote(Cl(mktdata)[,1]),
+    n=nF),
+  label="nFast")
+# Slow MA
+add.indicator(
+  strategy.st,
+  name='SMA',
+  arguments=list(
+    x=quote(Cl(mktdata)[,1]),
+    n=nS),
+  label="nSlow")
+
+# Signal - denote times at which the strategy may want to take action
+# Signal 1- long Rule
+add.signal(
+  strategy.st,
+  name='sigCrossover',
+  arguments=list(
+    columns=c("nFast","nSlow"),
+    relationship="gt"),
+  label='xlong')
+# Signal 2 - short rule
+add.signal(
+  strategy.st,
+  name='sigCrossover',
+  arguments=list(
+    columns=c("nFast","nSlow"),
+    relationship="gt"),
+  label='xshort')
+
+# Rules - point when strategy may take action
+# enter long
+add.rule(strategy.st,
+         name='ruleSignal',
+         arguments=list(sigcol='xlong',
+                        sigval=TRUE,
+                        orderside='long',
+                        ordertype='stoplimit',prefer='High',threshold=.0005, #tick size
+                        orderqty=+1, #qty
+                        replace=FALSE),
+         type='enter',
+         label='EnterLong')
+# enter short
+add.rule(strategy.st,
+         name='ruleSignal',
+         arguments=list(sigcol='xshort',
+                        sigval=TRUE,
+                        orderside='short',
+                        ordertype='stoplimit',prefer='Loq',threshold=-0.0005,
+                        orderqty=+1,
+                        replace=FALSE),
+         type='enter',
+         label='EnterShort')
+
+#Exit for long
+add.rule(strategy.st, 
+         name='ruleSignal',
+         arguments=list(sigcol='xlong',sigval=TRUE,
+                        orderside='short',
+                        ordertype='market',
+                        orderqty='all',
+                        replace=TRUE),
+         type='exit',
+         label='exitlong')
+
+#Exit for short
+add.rule(strategy.st,
+         name='ruleSignal',
+         arguments=list(sigcol='xshort',sigval=TRUE,
+                        orderside='long',
+                        ordertype='market',
+                        orderqty='all',
+                        replace=TRUE),
+         type='exit',
+         label='exitshort')
+
+t1 <- Sys.time()
+out <- applyStrategy(strategy=strategy.st,portfolios=portfolio.st)
+t2 <- Sys.time()
+print(t2-t1)
+
+updatePortf(portfolio.st)
+dateRange <- time(getPortfolio(portfolio.st)$summary)[-1]
+updateAcct(portfolio.st,dateRange)
+updateEndEq(account.st)
+
+tStats <- tradeStats(Portfolios = portfolio.st, use="trades", inclZeroDays=FALSE)
+tStats[,4:ncol(tStats)] <- round(tStats[,4:ncol(tStats)], 2)
+print(data.frame(t(tStats[,-c(1,2)])))
+(aggPF <- sum(tStats$Gross.Profits)/-sum(tStats$Gross.Losses))
+(aggCorrect <- mean(tStats$Percent.Positive))
+(numTrades <- sum(tStats$Num.Trades))
+(meanAvgWLR <- mean(tStats$Avg.WinLoss.Ratio[tStats$Avg.WinLoss.Ratio < Inf], na.rm=TRUE))
+
+portString <- paste0("portfolio.", portfolio.st)
+portPL <- .blotter[[portString]]$summary$Net.Trading.PL
+portPL <- portPL[-1,]
+plot(cumsum(portPL))
