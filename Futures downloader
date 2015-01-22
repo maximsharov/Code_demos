@@ -1,0 +1,41 @@
+load("downloader.RData") #GET IT!
+
+DownloadFutures <- function(stemCode, start_date=NULL, end_date=NULL) {
+  require(Quandl)
+  Quandl.auth('QRuGw-6Riym3niGbxcxR')
+  if(is.null(start_date)) {start_date <- Sys.Date()-365*1000}
+  if(is.null(end_date)) {end_date <- Sys.Date()+365*1000}
+  frontCode <- paste0(stemCode, 1)
+  backCode <- paste0(stemCode, 2)
+  front <- Quandl(frontCode, type="xts", start_date=start_date, end_date=end_date) 
+  interestColname <- colnames(front)[grep(pattern="Interest", colnames(front))]
+  front <- front[,c("Open","High","Low","Settle","Volume",interestColname)]
+  colnames(front) <- c("O","H","L","C","V","OI")
+  back <- Quandl(backCode, type="xts", start_date=start_date, end_date=end_date)
+  back <- back[,c("Open","High","Low","Settle","Volume",interestColname)]
+  colnames(back) <- c("BO","BH","BL","BS","BV","BI")
+  both <- cbind(front,back)
+  both$BI[is.na(both$BI)] <- -1
+  both$OI[is.na(both$OI)] <- -1
+  both$lagBI <- lag(both$BI)
+  both$lagOI <- lag(both$OI)
+  both$OI[both$OI==-1] <- both$lagOI[both$OI==-1]
+  both$BI[both$BI==-1] <- both$lagBI[both$BI==-1]
+  both$OIdiff <- both$OI - both$BI
+  both$tracker <- NA
+  both$tracker[both$OIdiff < 0] <- -1
+  both$tracker <- lag(both$tracker)
+  both$tracker[both$OIdiff > 0] <- 1
+  both$tracker <- na.locf(both$tracker)
+  frontRelevant <- both[both$tracker==1, c(1:6)]
+  backRelevant <- both[both$tracker==-1, c(7:12)]
+  colnames(frontRelevant) <- colnames(backRelevant) <- c("Open","High","Low","Close","Volume","OpenInterest")
+  relevant <- rbind(frontRelevant, backRelevant)
+  relevant[relevant==0] <- NA
+  instrument <- gsub(stemCode, "", stemCode)
+  relevant$Open[is.na(relevant$Open)] <- relevant$Close[(which(is.na(relevant$Open))-1)]
+  out <- relevant
+  return(out)
+}
+save(DownloadFutures, file="downloader.RData")
+save.image()
