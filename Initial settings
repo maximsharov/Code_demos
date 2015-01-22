@@ -1,0 +1,20 @@
+# initial settings, creation of a Strategy
+
+require(quantstrat)
+
+initDate='1990-01-01'
+currency('USD')
+Sys.setenv(TZ="UTC")
+symbols <- c("XXX")
+stock(symbols, currency="USD", multiplier=1)
+
+tradeSize <- 100000
+initEq <- tradeSize*length(symbols)
+
+strategy.st <- portfolio.st <- account.st <- "XXX"
+rm.strat(portfolio.st)
+rm.strat(strategy.st)
+initPortf(portfolio.st, symbols=symbols, initDate=initDate, currency='USD')
+initAcct(account.st, portfolios=portfolio.st, initDate=initDate, currency='USD',initEq=initEq)
+initOrders(portfolio.st, initDate=initDate)
+strategy(strategy.st, store=TRUE)
